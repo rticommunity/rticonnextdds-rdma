@@ -1,0 +1,178 @@
+###############################################################################
+##         (c) Copyright, Real-Time Innovations, All rights reserved.        ##
+##                                                                           ##
+##         Permission to modify and use for internal purposes granted.       ##
+## This software is provided "as is", without warranty, express or implied.  ##
+##                                                                           ##
+###############################################################################
+
+# This Makefile contains the common rules to build for all the architectures.
+# It is included from the architecture-specific Makefile.
+# This Makefile requires the following variables:
+# - ARCH: Architecture to build (for example i86Linux2.6gcc4.1.1)
+#
+# Optional variables:
+# - DEBUG: If set to '1', it turns on debugging information
+# - SHAREDLIB: If set to '1', shared libraries will be used
+# - CXX: compiler name.
+# - CXXFLAGS: compiler flags: will be appended to $CXX command-line
+# - CXXLD: linker name.
+# - CXXLDFLAGS: linker flags: will be inserted at the beginning of CXXLD cmdline
+# - SYSLIBS: additional system libraries to append to the CXXLD command-line
+
+###############################################################################
+# Ensure this Makefile is invoked with the right variable set
+###############################################################################
+ifeq ($(ARCH), )
+all:
+	@echo "***************************************************************"
+	@echo "You cannot use this Makefile directly, instead use the"
+	@echo "architecture-specific Makefile. For example:"
+	@echo "         gmake -f make/Makefile.i86Linux2.6gcc4.1.1"
+	@echo "***************************************************************"
+	@false
+else
+###############################################################################
+# Ensure $NDDSHOME is defined
+###############################################################################
+ifeq ($(NDDSHOME), )
+all:
+	@echo "***************************************************************"
+	@echo "The environment variable 'NDDSHOME' is not set!"
+	@echo "To use this makefile you need to set NDDSHOME to the directory"
+	@echo "where you have RTI Connext installed."
+	@echo "***************************************************************"
+	@false
+else
+###############################################################################
+# Ensure $BOOSTHOME is defined
+###############################################################################
+ifeq ($(BOOSTHOME), )
+all:
+	@echo "***************************************************************"
+	@echo "The environment variable 'BOOSTHOME' is not set!"
+	@echo "To use this makefile you need to set BOOSTHOME to the directory"
+	@echo "where you have Boost Libraries installed."
+	@echo "***************************************************************"
+	@false
+else
+###############################################################################
+# Ensure $BOOSTHOME is defined
+###############################################################################
+ifeq ($(DDDHOME), )
+all:
+	@echo "***************************************************************"
+	@echo "The environment variable 'DDDHOME' is not set!"
+	@echo "To use this makefile you need to set DDDHOME to the directory"
+	@echo "where you have dd2tuple Libraries installed."
+	@echo "***************************************************************"
+	@false
+endif
+endif
+endif
+endif
+
+# Define the sources and NDDS search path
+INCLUDES = -Iinclude -I$(NDDSHOME)/include             \
+           -I$(NDDSHOME)/include/ndds -I$(BOOSTHOME)   \
+           -I$(DDDHOME)/include
+
+RDMA_DDS_LIBRARY = rdma_dds
+
+###############################################################################
+# Modify build flags for debug/release
+###############################################################################
+ifeq ($(DEBUG),1)
+  CXXFLAGS     += -g -O0 
+  ifeq ($(STATICLIB),1)
+    NDDSLIBS    = -lnddscppzd -lnddsczd -lnddscorezd 
+    DDDLIB      = -ldd2tuplezd -l$(RDMA_DDS_LIBRARY)zd
+    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)zd.a
+    EXT         = zd
+    LIBEXT      = .a
+  else
+    NDDSLIBS    = -lnddscppd -lnddscd -lnddscored  
+    DDDLIB      = -ldd2tupled -l$(RDMA_DDS_LIBRARY)d
+    LINKFLAGS  += -fpic -shared
+    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)d.so
+    EXT         = d
+    LIBEXT      = .so
+  endif
+else
+  CXXFLAGS     += -O2 -DBOOST_MPL_LIMIT_LIST_SIZE=20
+  ifeq ($(STATICLIB),1)
+    NDDSLIBS    = -lnddscppz -lnddscz -lnddscorez
+    DDDLIB      = -ldd2tuple -l$(RDMA_DDS_LIBRARY)z
+    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)z.a
+    EXT         = z
+    LIBEXT      = .a
+  else
+    NDDSLIBS    = -lnddscpp -lnddsc -lnddscore
+    DDDLIB      = -ldd2tuple -l$(RDMA_DDS_LIBRARY)
+    LINKFLAGS  += -fpic -shared
+    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY).so
+    LIBEXT      = .so
+  endif
+endif
+
+LIBS = -L$(NDDSHOME)/lib/$(ARCH) -Lobjs/$(ARCH) $(NDDSLIBS) $(SYSLIBS) \
+       -L$(DDDHOME)/objs/$(ARCH) -L/usr/local/ofed/lib64  \
+       -L/usr/local/ofed/lib -libverbs 
+
+SOURCES = src/rdma_dds.cxx
+
+HEADERS = include/rdma_dds.h
+
+TESTSRCS = test/rdma_test.cxx 
+
+TESTHEADERS = test/rdma_test.h 
+
+TESTSRCS_NODIR = $(notdir $(TESTSRCS))
+TESTOBJS = $(TESTSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
+
+DIRECTORIES   = objs.dir objs/$(ARCH).dir 
+SOURCES_NODIR = $(notdir $(SOURCES))
+OBJECTS       = $(SOURCES_NODIR:%.cxx=objs/$(ARCH)/%.o)
+
+###############################################################################
+# Build Rules
+###############################################################################
+$(ARCH): $(DIRECTORIES) $(OBJECTS) $(RDMA_DDS_LIBRARY:%=objs/$(ARCH)/%.o) \
+         $(RDMA_DDS_LIBRARY:%=objs/$(ARCH)/lib%$(EXT)$(LIBEXT).out)
+
+objs/$(ARCH)/lib%$(EXT).so.out: objs/$(ARCH)/%.o 
+	$(CXXLD) $(OBJECTS) $(LINKFLAGS) $(CXXLDFLAGS) -o $(@:%.out=%)  $(LIBS)
+
+objs/$(ARCH)/lib%$(EXT).a.out: objs/$(ARCH)/%.o 
+	ar rcs $(@:%.out=%) $(OBJECTS) 
+
+objs/$(ARCH)/%.o: src/%.cxx $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $<
+
+# Here is how we create those subdirectories automatically.
+%.dir : 
+	@echo "Checking directory $*"
+	@if [ ! -d $* ]; then \
+		echo "Making directory $*"; \
+		mkdir -p $* ; \
+	fi;
+
+test: objs/$(ARCH)/rdma_test  
+
+objs/$(ARCH)/rdma_test: $(TESTOBJS)  
+	$(CXXLD) $(CXXLDFLAGS) -o $@ $(DDDLIB) $(LIBS) $(TESTOBJS) 
+
+objs/$(ARCH)/%.o: test/%.cxx  
+	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $<
+
+###############################################################################
+# Clean target: removes the objs dir
+###############################################################################
+clean:
+	@rm -Rf objs/$(ARCH)
+	@echo "Successfully deleted object and executable files for architecture $(ARCH)"
+	@echo "To delete ALL the architectures and any generated file use target 'veryclean'"
+
+veryclean:
+	@rm -Rf objs
+	@echo "Deleted all executables, objects and generated files"
