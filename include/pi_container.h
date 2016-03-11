@@ -2,6 +2,7 @@
 #define RTI_PI_CONTAINER_H
 
 #include "dllexport.h"
+#include "enable_if.h"
 #include "ndds/ndds_cpp.h"
 #include "ndds/reda/reda_fastBuffer.h"
 
@@ -17,8 +18,8 @@
 #define DEFAULT_BUFSIZE (1024*8)
 #define INITIAL_BUFFERS 20
 
-RDMA_DDS_DLL_EXPORT extern size_t default_bufsize;  
-RDMA_DDS_DLL_EXPORT extern size_t initial_bufsize; 
+DllExport extern size_t default_bufsize;  
+DllExport extern size_t initial_bufsize; 
 
 namespace align {
   template <class T>
@@ -29,18 +30,18 @@ namespace align {
   };
 }
 
-class RDMA_DDS_DLL_EXPORT pi_container 
+class DllExport pi_container 
 {
   // All derived types of pi_container
   // have a copy constructor of the following form.
   // pi_container(Allocator *, const pi_container &);
 };
 
-struct RDMA_DDS_DLL_EXPORT InvalidBuf {};
+struct DllExport InvalidBuf {};
 
 struct REDAFastBufferPool;
 
-class RDMA_DDS_DLL_EXPORT BufferPool
+class DllExport BufferPool
 {
   REDAFastBufferPool * pool;
 
@@ -57,10 +58,10 @@ public:
   ~BufferPool();
 };
 
-RDMA_DDS_DLL_EXPORT BufferPool * global_pool();
-RDMA_DDS_DLL_EXPORT size_t diff(void *p1, void *p2);
+DllExport BufferPool * global_pool();
+DllExport size_t diff(void *p1, void *p2);
 
-class RDMA_DDS_DLL_EXPORT Allocator
+class DllExport Allocator
 {
   size_t buf_size;  
   size_t head_offset;
@@ -72,7 +73,7 @@ public:
                   size_t alignment);
 };
 
-class RDMA_DDS_DLL_EXPORT pi_string : public pi_container
+class DllExport pi_string : public pi_container
 {
   size_t my_offset;
   size_t data_offset;
@@ -120,7 +121,7 @@ public:
 };
 
 
-RDMA_DDS_DLL_EXPORT std::ostream & operator << (std::ostream &o, const pi_string &p);
+DllExport std::ostream & operator << (std::ostream &o, const pi_string &p);
 
 template <class T>
 class pi_vector : public pi_container
@@ -134,7 +135,7 @@ class pi_vector : public pi_container
   template <class U>
   void construct(void *ptr, 
                  const U & val,
-                 typename std::enable_if<std::is_base_of<pi_container, U>::value>::type * = 0)
+                 typename enable_if<std::is_base_of<pi_container, U>::value>::type * = 0)
   {	
     // When U is some kind of pi_container.
     new (ptr) T(allocator_ptr(), val);
@@ -143,7 +144,7 @@ class pi_vector : public pi_container
   template <class U>
   void construct(void *ptr, 
                  const U & val,
-                 typename std::enable_if<!std::is_base_of<pi_container, U>::value>::type * = 0)
+                 typename enable_if<!std::is_base_of<pi_container, U>::value>::type * = 0)
   {	
     // When U is something else (e.g., int)
     new (ptr) T(val);
