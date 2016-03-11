@@ -1,5 +1,4 @@
 #include "rdma_test.h"
-#include "tuple_reader_writer.h"
 #include "rdma_dds.h"
 
 #define MSG_SIZE (5*1024*1024)
@@ -8,11 +7,11 @@
 struct PI_Shapes : public RDMA_Type
 {
   int x, y, shapesize;
-  PI_Shapes(Allocator * alloc)
+  PI_Shapes(Allocator * alloc = 0)
   {}
 };
 
-RTI_ADAPT_STRUCT(
+REFLEX_ADAPT_STRUCT(
   PI_Shapes,
   (int, x)
   (int, y)
@@ -49,12 +48,12 @@ void tput(const timeval &start,
 int main(int argc, char *argv[])
 {
     int domainId = 65;
-    int sample_count = 1; /* infinite loop */
+    int sample_count = 0; /* infinite loop */
     bool is_pub = false;
     int ib_port = 1;
     int gid_idx = -1;
     std::string device_name = "mlx4_0";
-    const char * topic_name;
+    const char * topic_name = "RDMA";
 
     if (argc >= 2) {
       is_pub = !strcmp(argv[1],"-pub");
@@ -84,8 +83,10 @@ int main(int argc, char *argv[])
       if(is_pub)
       {
         std::cout << "Starting producer\n";
+        reflex::pub::DataWriterParams dw_params(participant);
+        dw_params.topic_name(topic_name);
         RDMA_DataWriter<PI_Shapes> 
-          dw(&pool, participant, topic_name, device_name, ib_port, gid_idx, NBUFS);
+          dw(dw_params, &pool, device_name, ib_port, gid_idx, NBUFS);
         sleep(2);
         gettimeofday(&race_start, NULL);
         for(i = 0;(sample_count==0) |(i < sample_count);++i)
@@ -94,18 +95,16 @@ int main(int argc, char *argv[])
           reg.sample->x = i;
           reg.sample->y = i+i;
           reg.sample->shapesize = 30;
-#ifdef DEBUG
           std::cout << "writing " << std::dec << reg.sample->x << std::endl;
-#endif
           dw.write(std::move(reg));
           //sleep(1);
         }
       }
       else
       {
-        DDS_StringSeq params;
+        DDS_StringSeq str_params;
         DDS_DynamicDataTypeProperty_t props;
-        SafeTypeCode<DDS_TypeCode> stc(MakeTypecode<PI_Shapes>());
+        reflex::SafeTypeCode<PI_Shapes> stc(reflex::make_typecode<PI_Shapes>());
         std::shared_ptr<DDSDynamicDataTypeSupport> 
           safe_typeSupport(new DDSDynamicDataTypeSupport(stc.get(), props));
         const char * type_name = "PI_Shapes"; 
@@ -121,12 +120,15 @@ int main(int argc, char *argv[])
           participant->create_contentfilteredtopic(
               cf_topic_name.c_str(),
               topic,
-              "x < 5000 OR x >= 5000", // Just a test
-              params);
+              "x < 5000", // Just a test
+              str_params);
         if(cf_topic)
           std::cout << "Created Content Filtered Topic\n";
+
+        reflex::sub::DataReaderParams dr_params(participant);
+        dr_params.topic_name(cf_topic_name);
         RDMA_DataReader<PI_Shapes> 
-          dr(&pool, participant, cf_topic->get_name(), device_name, ib_port, gid_idx, NBUFS);
+          dr(dr_params, &pool, device_name, ib_port, gid_idx, NBUFS);
         std::cout << "Created consumer\n";
         sleep(1);
         gettimeofday(&race_start, NULL);
@@ -139,10 +141,8 @@ int main(int argc, char *argv[])
           if(rc == DDS_RETCODE_OK && 
              region.sample.info().valid_data)
           {
-#ifdef DEBUG
             fprintf(stdout, "received x=%d,y=%d\n", 
                 region.sample->x, region.sample->y); 
-#endif
             ++i;
             if(i % 1000 == 0)
             {

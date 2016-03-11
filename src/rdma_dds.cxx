@@ -334,7 +334,7 @@ bool wait_for_readers(DDSDataWriter * writer,
     DDS_Duration_t wait_period = {0, 1000*1000*wait_ms_per_iter};
     int iter = timeout_sec*1000/wait_ms_per_iter;
 
-    std::cout << "Waiting for discovery....\n"; 
+    std::cout << "wait_for_readers: Waiting for discovery....\n"; 
     for(int count = 0; count <= iter; ++count)
     {
       writer->get_matched_subscriptions(sub_handle_seq);
@@ -344,6 +344,7 @@ bool wait_for_readers(DDSDataWriter * writer,
         remote_qp_data = sub_builtin.user_data.value;
         return true;
       }
+      printf("waiting for readers...\n");
       NDDSUtility::sleep(wait_period);
     }
     std::cerr << "Discovery did not finish\n";
@@ -361,7 +362,7 @@ bool wait_for_writers(DDSDataReader * reader,
     DDS_Duration_t wait_period = {0, 1000*1000*wait_ms_per_iter};
     int iter = timeout_sec*1000/wait_ms_per_iter;
 
-    std::cout << "Waiting for discovery....\n"; 
+    std::cout << "wait_for_writers: Waiting for discovery....\n"; 
     for(int count = 0; count <= iter; ++count)
     {
       reader->get_matched_publications(pub_handle_seq);
@@ -371,6 +372,7 @@ bool wait_for_writers(DDSDataReader * reader,
         remote_qp_data = pub_builtin.user_data.value;
         return true;
       }
+      printf("waiting for writers...\n");
       NDDSUtility::sleep(wait_period);
     }
     std::cerr << "Discovery did not finish\n";

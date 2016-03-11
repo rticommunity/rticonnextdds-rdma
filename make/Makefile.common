@@ -59,12 +59,12 @@ else
 ###############################################################################
 # Ensure $BOOSTHOME is defined
 ###############################################################################
-ifeq ($(DDDHOME), )
+ifeq ($(REFLEXHOME), )
 all:
 	@echo "***************************************************************"
-	@echo "The environment variable 'DDDHOME' is not set!"
-	@echo "To use this makefile you need to set DDDHOME to the directory"
-	@echo "where you have dd2tuple Libraries installed."
+	@echo "The environment variable 'REFLEXHOME' is not set!"
+	@echo "To use this makefile you need to set REFLEXHOME to the directory"
+	@echo "where you have RefleX library installed."
 	@echo "***************************************************************"
 	@false
 endif
@@ -75,7 +75,7 @@ endif
 # Define the sources and NDDS search path
 INCLUDES = -Iinclude -I$(NDDSHOME)/include             \
            -I$(NDDSHOME)/include/ndds -I$(BOOSTHOME)   \
-           -I$(DDDHOME)/include
+           -I$(REFLEXHOME)/include
 
 RDMA_DDS_LIBRARY = rdma_dds
 
@@ -83,16 +83,16 @@ RDMA_DDS_LIBRARY = rdma_dds
 # Modify build flags for debug/release
 ###############################################################################
 ifeq ($(DEBUG),1)
-  CXXFLAGS     += -g -O0 
+  CXXFLAGS     += -g -O0 -DDEBUG
   ifeq ($(STATICLIB),1)
     NDDSLIBS    = -lnddscppzd -lnddsczd -lnddscorezd 
-    DDDLIB      = -ldd2tuplezd -l$(RDMA_DDS_LIBRARY)zd
+    DDDLIB      = -lreflexzd -l$(RDMA_DDS_LIBRARY)zd
     DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)zd.a
     EXT         = zd
     LIBEXT      = .a
   else
     NDDSLIBS    = -lnddscppd -lnddscd -lnddscored  
-    DDDLIB      = -ldd2tupled -l$(RDMA_DDS_LIBRARY)d
+    DDDLIB      = -lreflexd -l$(RDMA_DDS_LIBRARY)d
     LINKFLAGS  += -fpic -shared
     DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)d.so
     EXT         = d
@@ -102,13 +102,13 @@ else
   CXXFLAGS     += -O2 -DBOOST_MPL_LIMIT_LIST_SIZE=20
   ifeq ($(STATICLIB),1)
     NDDSLIBS    = -lnddscppz -lnddscz -lnddscorez
-    DDDLIB      = -ldd2tuple -l$(RDMA_DDS_LIBRARY)z
+    DDDLIB      = -lreflex -l$(RDMA_DDS_LIBRARY)z
     DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)z.a
     EXT         = z
     LIBEXT      = .a
   else
     NDDSLIBS    = -lnddscpp -lnddsc -lnddscore
-    DDDLIB      = -ldd2tuple -l$(RDMA_DDS_LIBRARY)
+    DDDLIB      = -lreflex -l$(RDMA_DDS_LIBRARY)
     LINKFLAGS  += -fpic -shared
     DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY).so
     LIBEXT      = .so
@@ -116,19 +116,25 @@ else
 endif
 
 LIBS = -L$(NDDSHOME)/lib/$(ARCH) -Lobjs/$(ARCH) $(NDDSLIBS) $(SYSLIBS) \
-       -L$(DDDHOME)/objs/$(ARCH) -L/usr/local/ofed/lib64  \
+       -L$(REFLEXHOME)/objs/$(ARCH) -L/usr/local/ofed/lib64  \
        -L/usr/local/ofed/lib -libverbs 
 
-SOURCES = src/rdma_dds.cxx
+SOURCES = src/rdma_dds.cxx \
+          src/pi_container.cxx
 
-HEADERS = include/rdma_dds.h
+HEADERS = include/rdma_dds.h \
+          include/pi_container.h
 
 TESTSRCS = test/rdma_test.cxx 
+QSTESTSRCS = test/qs_test.cxx 
 
 TESTHEADERS = test/rdma_test.h 
 
 TESTSRCS_NODIR = $(notdir $(TESTSRCS))
+QSTESTSRCS_NODIR = $(notdir $(TESTSRCS))
+
 TESTOBJS = $(TESTSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
+QSTESTOBJS = $(QSTESTSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
 
 DIRECTORIES   = objs.dir objs/$(ARCH).dir 
 SOURCES_NODIR = $(notdir $(SOURCES))
@@ -164,6 +170,15 @@ objs/$(ARCH)/rdma_test: $(TESTOBJS)
 
 objs/$(ARCH)/%.o: test/%.cxx  
 	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $<
+
+# qs_test
+qs_test: objs/$(ARCH)/qs_test  
+
+objs/$(ARCH)/qs_test: $(QSTESTOBJS)  
+	$(CXXLD) $(CXXLDFLAGS) -o $@ $(QSTESTOBJS) $(LIBS)
+
+objs/$(ARCH)/qs_test.o: $(QSTESTSRCS)  
+	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $< 
 
 ###############################################################################
 # Clean target: removes the objs dir

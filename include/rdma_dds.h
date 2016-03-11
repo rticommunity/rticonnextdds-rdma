@@ -1,6 +1,7 @@
 #ifndef RTI_RDMA_DDS_H
 #define RTI_RDMA_DDS_H
 
+#include <stdexcept>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -10,7 +11,8 @@
 
 #include <infiniband/verbs.h>
 #include "ndds/ndds_cpp.h"
-#include "tuple_reader_writer.h"
+#include "reflex.h"
+#include "pi_container.h"
 
 #include <string>
 #include <stack>
@@ -18,7 +20,7 @@
 #include <sstream>
 
 #define DEFAULT_BUFS 20
-#define READ_TIMEOUT (5*1000*1000)
+#define READ_TIMEOUT (5*10*1000*1000)
 #define CQ_TIMEOUT 50
 #define DISCOVERY_TIMEOUT_SEC 60 
 
@@ -185,19 +187,19 @@ struct BufferMan : public RDMA_EndPoint
 template <class PI>
 class RDMA_DataReader : public BufferMan<PI>
 {
-  DDSDomainParticipant * participant;
-  std::shared_ptr<GenericDataReader<PI>> dr;
+  reflex::sub::DataReaderParams params_;
+  std::shared_ptr<reflex::sub::DataReader<PI>> dr;
   DDSReadCondition * cond; 
-  std::string topic_name_;
   DDSWaitSet waitset;
   int poll_timeout_ms;
   int disc_timeout_sec;
+  std::vector<reflex::sub::Sample<PI>> data_seq;
 
   DDS_ReturnCode_t read_meta(PI &data, DDS_SampleInfo &, int);
+
 public:
-  RDMA_DataReader(BufferPool * pool,
-                  DDSDomainParticipant * part, 
-                  const std::string & topic_name,
+  RDMA_DataReader(const reflex::sub::DataReaderParams & params,
+                  BufferPool * pool,
                   std::string device_name, 
                   int ib_port, 
                   int gid_idx, 
@@ -205,13 +207,14 @@ public:
                   int cq_timeout = CQ_TIMEOUT,
                   int disc_timeout_s = DISCOVERY_TIMEOUT_SEC)
     : BufferMan<PI>(pool, device_name, ib_port, gid_idx, n),
-      participant(part),
+      params_(params),
       cond(0),
-      topic_name_(topic_name),
       poll_timeout_ms(cq_timeout),
       disc_timeout_sec(disc_timeout_s)
   {
     try {
+      if(!params.domain_participant())
+        throw std::logic_error("RDMA_DataReader: NULL domain participant");
       BufferMan<PI>::register_buffers();
       RDMA_EndPoint::init();    
     }
@@ -237,26 +240,28 @@ public:
 template <class PI>
 class RDMA_DataWriter : public BufferMan<PI>
 {
-  DDSDomainParticipant * participant;
-  std::string topic_name_;
-  std::shared_ptr<GenericDataWriter<PI>> dw;
+  reflex::pub::DataWriterParams params_;
+  std::shared_ptr<reflex::pub::DataWriter<PI>> dw;
   AckReceiver<PI> ar;
   int disc_timeout_sec;
 public:
-  RDMA_DataWriter(BufferPool * pool,
-                  DDSDomainParticipant * part, 
-                  const std::string & topic_name,
+  RDMA_DataWriter(const reflex::pub::DataWriterParams & params,
+                  BufferPool * pool,
                   std::string device_name, 
                   int ib_port, 
                   int gid_idx, 
                   int n = 10,
                   int disc_timeout = DISCOVERY_TIMEOUT_SEC)
     : BufferMan<PI>(pool, device_name, ib_port, gid_idx, n),
-      participant(part),
-      topic_name_(topic_name),
+      params_(params),
       ar(this),
       disc_timeout_sec(disc_timeout)
   { 
+    if(!params.domain_participant())
+    {
+      std::cerr << "logic_error\n";
+      throw std::logic_error("RDMA_DataWriter: NULL domain participant");
+    }
     BufferMan<PI>::register_buffers();
     RDMA_EndPoint::init();    
   }
@@ -288,9 +293,13 @@ DDS_ReturnCode_t RDMA_DataReader<PI>::read_meta(PI &data,
   {
     if(active_conditions[0] == cond) 
     {
-      rc = dr->take_w_condition(data, info, cond);
+      rc = dr->take_w_condition(this->data_seq, 1, cond);
       switch(rc)
       {
+        case DDS_RETCODE_OK:
+          data = this->data_seq[0].data();
+          info = this->data_seq[0].info();
+          break;
         case DDS_RETCODE_PRECONDITION_NOT_MET:
           std::cout << "PRECONDITION NOT MET\n";
           break;
@@ -299,6 +308,9 @@ DDS_ReturnCode_t RDMA_DataReader<PI>::read_meta(PI &data,
           break;
         case DDS_RETCODE_NOT_ENABLED:
           std::cout << "RETCODE_NOT_ENABLED\n";
+          break;
+        default:
+          std::cout << "else\n";
           break;
       }
     }
@@ -316,16 +328,16 @@ MemRegion<PI> RDMA_DataReader<PI>::take(DDS_ReturnCode_t & rc)
                  region.sample.info(), 1);
 
   if(rc != DDS_RETCODE_OK)
+  {
     return std::move(region);
+  }
   else
   {
     if(region.sample.info().valid_data) 
     {
       RDMA_Type remote_data = region.sample.data();
-#ifdef VERBOSE 
-      std::cout << std::hex << "buf=" << (void *) region.sample->addr
-                << std::hex << " rkey="  << (void *) region.sample->rkey << std::endl;
-#endif
+      //std::cout << std::hex << "buf=" << (void *) region.sample->addr;
+      //std::cout << std::hex << " rkey="  << (void *) region.sample->rkey << std::endl;
       if (post_send(BufferMan<PI>::res,
                     remote_data.addr, 
                     remote_data.rkey, 
@@ -350,6 +362,7 @@ MemRegion<PI> RDMA_DataReader<PI>::take(DDS_ReturnCode_t & rc)
     }
     else
     {
+      std::cout << "DDS_RETCODE_NO_DATA\n";
       rc = DDS_RETCODE_NO_DATA;
     }
   }
@@ -394,33 +407,28 @@ template <class PI>
 int RDMA_DataWriter<PI>::create_dds_entities(const DDS_OctetSeq & local_qp_data)
 {
   DDS_ReturnCode_t retcode;
-  const char * type_name;
-  DDSTopic *topic = NULL;
 
   DDS_DataWriterQos  dw_qos;
-  participant->get_default_datawriter_qos(dw_qos);
+  params_.domain_participant()->get_default_datawriter_qos(dw_qos);
   dw_qos.user_data.value = local_qp_data;
 
-  dw = std::make_shared<GenericDataWriter<PI>>(participant, dw_qos, topic_name_.c_str(), (char *) 0, &ar);
- /* dw->underlying()->set_listener(&ar, 
-        DDS_STATUS_MASK_ALL|
-        DDS_DATA_WRITER_SAMPLE_REMOVED_STATUS);
- */ 
+  dw = std::make_shared<reflex::pub::DataWriter<PI>>(
+         params_.datawriter_qos(dw_qos)
+                .listener(&ar)
+                .listener_statusmask(DDS_STATUS_MASK_ALL | 
+                                     DDS_DATA_WRITER_SAMPLE_REMOVED_STATUS));
   return 0;
 }
 
 template <class PI>
 int RDMA_DataReader<PI>::create_dds_entities(const DDS_OctetSeq & local_qp_data)
 {
-  DDS_ReturnCode_t retcode;
-  const char * type_name;
-  DDSTopic *topic = NULL;
-  
-  DDS_DataReaderQos  dr_qos;
-  participant->get_default_datareader_qos(dr_qos);
+  DDS_DataReaderQos dr_qos;
+  params_.domain_participant()->get_default_datareader_qos(dr_qos);
   dr_qos.user_data.value = local_qp_data;
 
-  dr = std::make_shared<GenericDataReader<PI>>(participant, dr_qos, nullptr, topic_name_.c_str());
+  dr = std::make_shared<reflex::sub::DataReader<PI>>(
+        params_.datareader_qos(dr_qos));
   cond = dr->underlying()->create_readcondition(DDS_NOT_READ_SAMPLE_STATE,
                                                 DDS_ANY_VIEW_STATE,
                                                 DDS_ANY_INSTANCE_STATE);
@@ -529,9 +537,9 @@ void AckReceiver<PI>::on_sample_removed(
   DDSDataWriter*,
   const DDS_Cookie_t & cookie)
 {
-#ifdef VERBOSE 
+//#ifdef VERBOSE 
   std::cout << "sample removed\n";
-#endif
+//#endif
   BufferPool * bufpool;
   void * raw_buf;
   ibv_mr * mr;
