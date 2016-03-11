@@ -8,14 +8,14 @@
 #include "pi_container.h"
 
 #ifdef RTI_WIN32
-  DllExport extern size_t default_bufsize = DEFAULT_BUFSIZE;
-  DllExport extern size_t initial_buffers = INITIAL_BUFFERS;
+  RDMA_DDS_DLL_EXPORT extern size_t default_bufsize = DEFAULT_BUFSIZE;
+  RDMA_DDS_DLL_EXPORT extern size_t initial_buffers = INITIAL_BUFFERS;
 #else
   size_t default_bufsize = DEFAULT_BUFSIZE;
   size_t initial_buffers = INITIAL_BUFFERS;
 #endif
 
-DllExport BufferPool * global_pool()
+RDMA_DDS_DLL_EXPORT BufferPool * global_pool()
 {
   static BufferPool instance(default_bufsize, initial_buffers);
   return &instance;

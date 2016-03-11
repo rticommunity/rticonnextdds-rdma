@@ -86,15 +86,15 @@ ifeq ($(DEBUG),1)
   CXXFLAGS     += -g -O0 -DDEBUG
   ifeq ($(STATICLIB),1)
     NDDSLIBS    = -lnddscppzd -lnddsczd -lnddscorezd 
-    DDDLIB      = -lreflexzd -l$(RDMA_DDS_LIBRARY)zd
-    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)zd.a
+    REFLEXLIB   = -lreflexzd -l$(RDMA_DDS_LIBRARY)zd
+    RDMALIBOUT  = lib$(RDMA_DDS_LIBRARY)zd.a
     EXT         = zd
     LIBEXT      = .a
   else
     NDDSLIBS    = -lnddscppd -lnddscd -lnddscored  
-    DDDLIB      = -lreflexd -l$(RDMA_DDS_LIBRARY)d
+    REFLEXLIB   = -lreflexd -l$(RDMA_DDS_LIBRARY)d
     LINKFLAGS  += -fpic -shared
-    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)d.so
+    RDMALIBOUT  = lib$(RDMA_DDS_LIBRARY)d.so
     EXT         = d
     LIBEXT      = .so
   endif
@@ -102,15 +102,15 @@ else
   CXXFLAGS     += -O2 -DBOOST_MPL_LIMIT_LIST_SIZE=20
   ifeq ($(STATICLIB),1)
     NDDSLIBS    = -lnddscppz -lnddscz -lnddscorez
-    DDDLIB      = -lreflex -l$(RDMA_DDS_LIBRARY)z
-    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY)z.a
+    REFLEXLIB   = -lreflex -l$(RDMA_DDS_LIBRARY)z
+    RDMALIBOUT  = lib$(RDMA_DDS_LIBRARY)z.a
     EXT         = z
     LIBEXT      = .a
   else
     NDDSLIBS    = -lnddscpp -lnddsc -lnddscore
-    DDDLIB      = -lreflex -l$(RDMA_DDS_LIBRARY)
+    REFLEXLIB   = -lreflex -l$(RDMA_DDS_LIBRARY)
     LINKFLAGS  += -fpic -shared
-    DDDLIBOUT   = lib$(RDMA_DDS_LIBRARY).so
+    RDMALIBOUT  = lib$(RDMA_DDS_LIBRARY).so
     LIBEXT      = .so
   endif
 endif
@@ -131,7 +131,7 @@ QSTESTSRCS = test/qs_test.cxx
 TESTHEADERS = test/rdma_test.h 
 
 TESTSRCS_NODIR = $(notdir $(TESTSRCS))
-QSTESTSRCS_NODIR = $(notdir $(TESTSRCS))
+QSTESTSRCS_NODIR = $(notdir $(QSTESTSRCS))
 
 TESTOBJS = $(TESTSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
 QSTESTOBJS = $(QSTESTSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
@@ -166,7 +166,7 @@ objs/$(ARCH)/%.o: src/%.cxx $(HEADERS)
 test: objs/$(ARCH)/rdma_test  
 
 objs/$(ARCH)/rdma_test: $(TESTOBJS)  
-	$(CXXLD) $(CXXLDFLAGS) -o $@ $(DDDLIB) $(LIBS) $(TESTOBJS) 
+	$(CXXLD) $(CXXLDFLAGS) -o $@ $(REFLEXLIB) $(LIBS) $(TESTOBJS) 
 
 objs/$(ARCH)/%.o: test/%.cxx  
 	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $<
@@ -175,7 +175,7 @@ objs/$(ARCH)/%.o: test/%.cxx
 qs_test: objs/$(ARCH)/qs_test  
 
 objs/$(ARCH)/qs_test: $(QSTESTOBJS)  
-	$(CXXLD) $(CXXLDFLAGS) -o $@ $(QSTESTOBJS) $(LIBS)
+	$(CXXLD) $(CXXLDFLAGS) -o $@  $(QSTESTOBJS) $(LIBS) $(REFLEXLIB)
 
 objs/$(ARCH)/qs_test.o: $(QSTESTSRCS)  
 	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $< 
