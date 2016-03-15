@@ -6,7 +6,7 @@ class HelloWorldPubListener : public DDS::DataWriterListener {
   public:
     bool foundQS;
     
-    /*virtual void on_publication_matched(
+    virtual void on_publication_matched(
             DDSDataWriter *writer, const DDS::PublicationMatchedStatus &status) 
     {
       DDS::SubscriptionBuiltinTopicData subscriptionData;
@@ -23,7 +23,7 @@ class HelloWorldPubListener : public DDS::DataWriterListener {
                 }
             }
         }
-    }*/
+    }
      
     virtual void on_application_acknowledgment(DDSDataWriter *writer, const DDS::AcknowledgmentInfo &info)
     {
@@ -43,7 +43,7 @@ class HelloWorldPubListener : public DDS::DataWriterListener {
     }
     
     HelloWorldPubListener() {
-        foundQS = true;
+        foundQS = false;
     }
 };
 class ReaderListener : public DDSDataReaderListener
@@ -181,14 +181,13 @@ void hello_qs_subscriber(int domain_id)
 
     reader_listener.set_reflex_datareader(datareader);
 
-    /*printf("Waiting to discover SharedReaderQueue ...\n");
+    printf("Waiting to discover SharedReaderQueue ...\n");
 
     DDS_Duration_t period{ 0, 100 * 1000 * 1000 };
     while (!reader_listener.foundQS) {
       NDDSUtility::sleep(period);
     }
-    std::cout <<"Found SharedReaderQueue!\n";*/
-
+    std::cout <<"Found SharedReaderQueue!\n";
     for (;;)
     {       
       std::cout << "Polling\n";
@@ -204,7 +203,7 @@ void hello_qs_publisher(int domain_id)
   DDSDomainParticipant *   participant = NULL;
   DDS_DynamicDataTypeProperty_t props;
   DDS_Duration_t period{ 0, 100 * 1000 * 1000 };
-  const char *topic_name = "HelloWorldTopic@SharedSubscriber";
+  const char *topic_name = "HelloWorldTopic";
 
   HelloWorldPubListener writerListener;
   participant = DDSDomainParticipantFactory::get_instance()->
@@ -219,6 +218,14 @@ void hello_qs_publisher(int domain_id)
   } 
 
   HelloWorldPubListener listener;
+  HelloWorldPubListener listener2;
+
+  reflex::pub::DataWriter<HelloWorld>
+    discovery_writer(reflex::pub::DataWriterParams(participant)
+             .topic_name("HelloWorldTopic@SharedSubscriber")
+             .listener_statusmask(DDS_STATUS_MASK_ALL)
+             .listener(&listener2));
+
 
   reflex::pub::DataWriter<HelloWorld>
      writer(reflex::pub::DataWriterParams(participant)
@@ -227,13 +234,13 @@ void hello_qs_publisher(int domain_id)
              .listener(&listener));
 
    /* Wait for Queuing Service discovery */
-      std::cout <<"\nWaiting to discover Consumer...\n";
+      std::cout <<"\nWaiting to discover SharedReaderQueue ...\n";
 
          while (!listener.foundQS) {
                  NDDSUtility::sleep(period);
                      }
      
-          std::cout<<"\nConsumer discovered...\n";
+          std::cout<<"\nSharedReaderQueue discovered...\n";
 
   int i = 1;
   while(1)
@@ -250,24 +257,26 @@ void hello_qs_publisher(int domain_id)
     NDDSUtility::sleep(period);
   }
 }
-
-
 int main(int argc, char *argv[])
 {
-  int domainId = 21;
-  if (argc >= 2) {
-    is_pub = !strcmp(argv[1],"-pub");
-  }   
-  if(is_pub)
+  int domain_id = 21; 
+  if (argc >=2)
   {
-    std::cout << "\nStarting producer\n";
-    hello_qs_publisher(domainId);
+  if (0 == strcmp(argv[1],"pub"))
+  {
+    std::cout<<"\n starting publisher";
+    hello_qs_publisher(domain_id);
+  }
+  else if( 0 == strcmp(argv[1],"sub"))
+  {
+    std::cout <<"\n starting consumer";
+    hello_qs_subscriber(domain_id);
   }
   else
   {
-    std::cout<<"Starting Consumer\n";
-    hello_qs_subscriber(domainId);
+    std::cout <<"\n format is: objs/../qs_test pub (or sub)\n";
   }
-
+  }
   return 0;
 }
+
