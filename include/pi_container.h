@@ -256,7 +256,7 @@ public:
   {
     if(n > cap)
     {
-      using std::min;
+      using std::min; // ALIGNOF uses std::min
       destroy_all();
       char * data_ptr = allocator_ptr()->allocate(sizeof(T), n, ALIGNOF(T));
       data_offset = diff(data_ptr, allocator_ptr());
@@ -306,6 +306,11 @@ public:
   size_t size() const
   {
     return count;
+  }
+
+  bool empty() const
+  {
+    return count==0;
   }
 
   T & operator [] (size_t index)
@@ -485,13 +490,13 @@ public:
     return *this;
   }
 
-  void swap(pi_sample & p1, pi_sample &p2)
+  void swap(pi_sample & other)
   {
     using std::swap;
 
-    swap(p1.bufpool, p2.bufpool);
-    swap(p1.buf, p2.buf);
-    swap(p1.val_info, p2.val_info);
+    swap(other.bufpool, this->bufpool);
+    swap(other.buf, this->buf);
+    swap(other.val_info, this->val_info);
   }
 
   void reset()
@@ -557,6 +562,29 @@ public:
   }
 };
 
+namespace reflex {
+  namespace type_traits {
+
+    template <>
+    struct is_string<pi_string>
+    {
+      enum { value = true };
+    };
+  
+    template <class T>
+    struct is_container<pi_vector<T>>
+    {
+      enum { value = true };
+    };
+  
+    template <class T>
+    struct is_vector<pi_vector<T>>
+    {
+      enum { value = true };
+    };
+  
+  } // namespace type_traits
+} // namespace reflex
 
 #endif // RTI_PI_CONTAINER_H
 

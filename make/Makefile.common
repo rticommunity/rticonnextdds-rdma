@@ -126,15 +126,15 @@ HEADERS = include/rdma_dds.h \
           include/pi_container.h
 
 TESTSRCS = test/rdma_test.cxx 
-QSTESTSRCS = test/qs_test.cxx 
+FERMIDEMOSRCS = test/fermi_demo.cxx 
 
 TESTHEADERS = test/rdma_test.h 
 
 TESTSRCS_NODIR = $(notdir $(TESTSRCS))
-QSTESTSRCS_NODIR = $(notdir $(QSTESTSRCS))
+FERMIDEMOSRCS_NODIR = $(notdir $(FERMIDEMOSRCS))
 
 TESTOBJS = $(TESTSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
-QSTESTOBJS = $(QSTESTSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
+FERMIDEMOOBJS = $(FERMIDEMOSRCS_NODIR:%.cxx=objs/$(ARCH)/%.o)
 
 DIRECTORIES   = objs.dir objs/$(ARCH).dir 
 SOURCES_NODIR = $(notdir $(SOURCES))
@@ -171,13 +171,12 @@ objs/$(ARCH)/rdma_test: $(TESTOBJS)
 objs/$(ARCH)/%.o: test/%.cxx  
 	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $<
 
-# qs_test
-qs_test: objs/$(ARCH)/qs_test  
+fermi_demo: objs/$(ARCH)/fermi_demo  
 
-objs/$(ARCH)/qs_test: $(QSTESTOBJS)  
-	$(CXXLD) $(CXXLDFLAGS) -o $@  $(QSTESTOBJS) $(LIBS) $(REFLEXLIB)
+objs/$(ARCH)/fermi_demo: $(FERMIDEMOOBJS)  
+	$(CXXLD) $(CXXLDFLAGS) -o $@  $(FERMIDEMOOBJS) $(LIBS) $(REFLEXLIB)
 
-objs/$(ARCH)/qs_test.o: $(QSTESTSRCS)  
+objs/$(ARCH)/fermi_demo.o: $(FERMIDEMOSRCS)  
 	$(CXX) $(CXXFLAGS) -o $@ $(DEFINES) $(INCLUDES) -c $< 
 
 ###############################################################################

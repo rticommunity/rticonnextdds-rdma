@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
           std::cout << "Created Content Filtered Topic\n";
 
         reflex::sub::DataReaderParams dr_params(participant);
-        dr_params.topic_name(cf_topic_name);
+        dr_params.topic_name(topic_name);
         RDMA_DataReader<PI_Shapes> 
           dr(dr_params, &pool, device_name, ib_port, gid_idx, NBUFS);
         std::cout << "Created consumer\n";

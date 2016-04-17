@@ -330,8 +330,8 @@ bool wait_for_readers(DDSDataWriter * writer,
 {
     DDS_InstanceHandleSeq sub_handle_seq;
     DDS_SubscriptionBuiltinTopicData sub_builtin;
-    unsigned int wait_ms_per_iter = 100;
-    DDS_Duration_t wait_period = {0, 1000*1000*wait_ms_per_iter};
+    unsigned int wait_ms_per_iter = 1000;
+    DDS_Duration_t wait_period = {0, 20*1000*1000*wait_ms_per_iter};
     int iter = timeout_sec*1000/wait_ms_per_iter;
 
     std::cout << "wait_for_readers: Waiting for discovery....\n"; 
@@ -358,7 +358,7 @@ bool wait_for_writers(DDSDataReader * reader,
 {
     DDS_InstanceHandleSeq pub_handle_seq;
     DDS_PublicationBuiltinTopicData pub_builtin;
-    unsigned int wait_ms_per_iter = 100;
+    unsigned int wait_ms_per_iter = 1000;
     DDS_Duration_t wait_period = {0, 1000*1000*wait_ms_per_iter};
     int iter = timeout_sec*1000/wait_ms_per_iter;
 

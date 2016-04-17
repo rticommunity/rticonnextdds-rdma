@@ -16,6 +16,7 @@
 
 #include <string>
 #include <stack>
+#include <vector>
 #include <memory>
 #include <sstream>
 
@@ -163,7 +164,7 @@ template <class PI>
 struct BufferMan : public RDMA_EndPoint
 {
   BufferPool *bufpool;
-  std::stack<MemRegion<PI>> avail_buf;   
+  std::vector<MemRegion<PI>> avail_buf;   
   size_t nbuf;
   RTIOsapiSemaphore *buf_mutex;
 
@@ -195,7 +196,7 @@ class RDMA_DataReader : public BufferMan<PI>
   int disc_timeout_sec;
   std::vector<reflex::sub::Sample<PI>> data_seq;
 
-  DDS_ReturnCode_t read_meta(PI &data, DDS_SampleInfo &, int);
+  MemRegion<PI> read_meta(DDS_ReturnCode_t & rc);
 
 public:
   RDMA_DataReader(const reflex::sub::DataReaderParams & params,
@@ -274,16 +275,18 @@ public:
 };
 
 template <class PI>
-DDS_ReturnCode_t RDMA_DataReader<PI>::read_meta(PI &data, 
-                                                DDS_SampleInfo &info, 
-                                                int)
+MemRegion<PI> RDMA_DataReader<PI>::read_meta(DDS_ReturnCode_t &rc)
 {
-  //std::cout << "inside read meta\n";
-  DDS_ReturnCode_t rc;
+#ifdef VERBOSE 
+  std::cout << "inside read meta\n";
+#endif
+
   DDS_Duration_t MAX_WAIT = {0,READ_TIMEOUT};
+  MemRegion<PI> region = BufferMan<PI>::get_mr();
 
   DDSConditionSeq active_conditions;
   rc = waitset.wait(active_conditions, MAX_WAIT);
+
   if(rc != DDS_RETCODE_OK)
   {
     if(rc != DDS_RETCODE_TIMEOUT)
@@ -293,39 +296,40 @@ DDS_ReturnCode_t RDMA_DataReader<PI>::read_meta(PI &data,
   {
     if(active_conditions[0] == cond) 
     {
-      rc = dr->take_w_condition(this->data_seq, 1, cond);
-      switch(rc)
-      {
-        case DDS_RETCODE_OK:
-          data = this->data_seq[0].data();
-          info = this->data_seq[0].info();
-          break;
-        case DDS_RETCODE_PRECONDITION_NOT_MET:
-          std::cout << "PRECONDITION NOT MET\n";
-          break;
-        case DDS_RETCODE_NO_DATA:
-          std::cout << "RETCODE_NO_DATA\n";
-          break;
-        case DDS_RETCODE_NOT_ENABLED:
-          std::cout << "RETCODE_NOT_ENABLED\n";
-          break;
-        default:
-          std::cout << "else\n";
-          break;
+      try {
+        connext::LoanedSamples<DDS_DynamicData> loan = 
+          dr->take_w_condition(1, cond);
+
+        if(loan.length() > 0 && loan[0].info().valid_data)
+        {
+          reflex::read_dynamicdata(region.sample.data(), loan[0].data());
+          region.sample.info() = loan[0].info();
+          rc = DDS_RETCODE_OK;
+        }
+        else
+          rc = DDS_RETCODE_NO_DATA;
+      }
+      catch(std::exception & e) {
+        std::cerr << e.what() << std::endl;
+        rc = DDS_RETCODE_ERROR;
+      }
+      catch(...) {
+        rc = DDS_RETCODE_ERROR;
       }
     }
+    else
+      rc = DDS_RETCODE_NO_DATA;
   }
-  return rc;
+  return region;
 }
 
 template <class PI>
 MemRegion<PI> RDMA_DataReader<PI>::take(DDS_ReturnCode_t & rc)
 {
   //std::cout << "before get_mr\n";
-  MemRegion<PI> region = BufferMan<PI>::get_mr();
+  //MemRegion<PI> region = BufferMan<PI>::get_mr();
   
-  rc = read_meta(region.sample.data(), 
-                 region.sample.info(), 1);
+  MemRegion<PI> region = read_meta(rc);
 
   if(rc != DDS_RETCODE_OK)
   {
@@ -336,8 +340,11 @@ MemRegion<PI> RDMA_DataReader<PI>::take(DDS_ReturnCode_t & rc)
     if(region.sample.info().valid_data) 
     {
       RDMA_Type remote_data = region.sample.data();
-      //std::cout << std::hex << "buf=" << (void *) region.sample->addr;
-      //std::cout << std::hex << " rkey="  << (void *) region.sample->rkey << std::endl;
+      //std::cout << std::hex << "buf=" << (void *) region.sample->addr << std::endl;
+      //std::cout << std::hex << "rkey="  << (void *) region.sample->rkey << std::endl;
+      //std::cout << std::hex << "raw_buf="  << (void *) region.sample.raw_buf() << std::endl;
+      //std::cout << std::hex << "buf_size="  << (void *) region.sample.buf_size() << std::endl;
+      //std::cout << std::hex << "mr="  << (void *) region.mr << std::endl;
       if (post_send(BufferMan<PI>::res,
                     remote_data.addr, 
                     remote_data.rkey, 
@@ -472,7 +479,7 @@ void BufferMan<PI>::register_buffers()
     res.register_region(region.sample.raw_buf(), 
                         region.sample.buf_size(), 
                         region.mr);
-    avail_buf.push(std::move(region));
+    avail_buf.push_back(std::move(region));
   }
   RTIOsapiSemaphore_give(buf_mutex);
 }
@@ -481,7 +488,6 @@ template <class PI>
 MemRegion<PI> BufferMan<PI>::get_mr()
 {
  RTIOsapiSemaphore_take(buf_mutex, NULL);
- //std::cout << std::dec << "avail_buf= " << avail_buf.size() << std::endl;
 
  for(;;)
  {
@@ -494,17 +500,20 @@ MemRegion<PI> BufferMan<PI>::get_mr()
    else
      break;
  }
- MemRegion<PI> ret = std::move(avail_buf.top());
- avail_buf.pop();
+ //std::cout << std::dec << "avail_buf size = " << avail_buf.size() << std::endl;
+ //std::cout << std::hex << "move top.mr = " << avail_buf.back().mr << std::endl;
+ MemRegion<PI> ret = std::move(avail_buf.back());
+ avail_buf.pop_back();
  RTIOsapiSemaphore_give(buf_mutex);
- return std::move(ret);
+ //return std::move(ret);
+ return ret;
 }
 
 template <class PI>
 void BufferMan<PI>::return_mr(MemRegion<PI> && mr)
 {
  RTIOsapiSemaphore_take(buf_mutex, NULL);
- avail_buf.push(std::move(mr));
+ avail_buf.push_back(std::move(mr));
  RTIOsapiSemaphore_give(buf_mutex);
 }
 
@@ -537,9 +546,9 @@ void AckReceiver<PI>::on_sample_removed(
   DDSDataWriter*,
   const DDS_Cookie_t & cookie)
 {
-//#ifdef VERBOSE 
+#ifdef VERBOSE 
   std::cout << "sample removed\n";
-//#endif
+#endif
   BufferPool * bufpool;
   void * raw_buf;
   ibv_mr * mr;
@@ -568,7 +577,7 @@ MemRegion<PI>::MemRegion(BufferPool *pool,
 
 template <class PI>
 MemRegion<PI>::MemRegion(BufferPool *pool, BufferMan<PI> & bm, 
-          void *buf, size_t size, ibv_mr *m)
+                         void *buf, size_t size, ibv_mr *m)
   : sample(pool, buf, size),
     mr(m),
     bufman(&bm)
