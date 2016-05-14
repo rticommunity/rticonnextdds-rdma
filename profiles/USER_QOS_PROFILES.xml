@@ -1,0 +1,206 @@
+<?xml version="1.0"?>
+<!-- 
+Description
+XML QoS Profile for rdma
+
+The QoS configuration of the DDS entities in the generated example is 
+loaded from this file.
+
+This file is used only when it is in the current working directory
+or when the environment variable
+NDDS_QOS_PROFILES is defined and points to this file.
+
+For more information about XML QoS Profiles see Chapter 15 in the 
+RTI Connext user manual.
+-->
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:noNamespaceSchemaLocation="C:\Apps\RTI500\ndds.5.0.0\resource\qos_profiles_5.0.0\schema\rti_dds_profiles.xsd"
+     version="5.0.0">
+    <!-- QoS Library containing the QoS profile used in the generated example.
+
+        A QoS library is a named set of QoS profiles.
+    -->
+    <qos_library name="rdma_library">
+
+        <!-- QoS profile used to configure reliable communication between the DataWriter 
+             and DataReader created in the example code.
+
+             A QoS profile groups a set of related QoS.
+        -->
+        <qos_profile name="rdma_profile" is_default_qos="true">
+            <!-- QoS used to configure the data writer created in the example code -->                
+            <datawriter_qos>
+            <resource_limits>
+                    <max_samples>LENGTH_UNLIMITED</max_samples>
+                    <initial_samples>100</initial_samples>
+            </resource_limits>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                    <!--acknowledgment_kind>DDS_APPLICATION_AUTO_ACKNOWLEDGMENT_MODE</acknowledgment_kind-->
+                    <acknowledgment_kind>DDS_APPLICATION_EXPLICIT_ACKNOWLEDGMENT_MODE</acknowledgment_kind>
+                    <max_blocking_time>
+                        <sec>6</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>                
+
+                <history>
+                    <kind>KEEP_ALL_HISTORY_QOS</kind>
+                </history>
+                <!--lifespan>
+                   <duration>
+                     <sec>5</sec>
+                     <nanosec>0</nanosec>
+                  </duration>
+                </lifespan-->
+
+                <protocol>
+                    <rtps_reliable_writer>
+                        <min_send_window_size>50</min_send_window_size>
+                        <max_send_window_size>50</max_send_window_size>
+                        <low_watermark>10</low_watermark>
+                        <high_watermark>100</high_watermark>
+
+                        <heartbeats_per_max_samples>
+                            1000
+                        </heartbeats_per_max_samples>
+                        <!--
+                        Speed up the heartbeat rate. See reliable.xml for
+                        more information about this parameter.
+                        -->            
+                        <heartbeat_period>
+                            <!-- 10 milliseconds: -->
+                            <sec>0</sec>
+                            <nanosec>10000000</nanosec>
+                        </heartbeat_period>
+                        <fast_heartbeat_period>
+                            <sec>0</sec>
+                            <nanosec>10000000</nanosec>
+                        </fast_heartbeat_period>
+                        <late_joiner_heartbeat_period>
+                            <!-- 10 milliseconds: -->
+                            <sec>0</sec>
+                            <nanosec>10000000</nanosec>
+                        </late_joiner_heartbeat_period>
+                        <max_heartbeat_retries>500</max_heartbeat_retries>
+                        <min_nack_response_delay>
+                            <sec>0</sec>
+                            <nanosec>0</nanosec>
+                        </min_nack_response_delay>
+                        <max_nack_response_delay>
+                            <sec>0</sec>
+                            <nanosec>0</nanosec>
+                        </max_nack_response_delay>
+                    </rtps_reliable_writer>
+                </protocol>
+		
+            </datawriter_qos>
+
+            <!-- QoS used to configure the data reader created in the example code -->                
+            <datareader_qos>
+                <resource_limits>
+                    <max_samples>100</max_samples>
+                    <initial_samples>100</initial_samples>
+                </resource_limits>
+				
+                <protocol>
+                    <rtps_reliable_reader>
+                        <min_heartbeat_response_delay>
+                            <sec>0</sec>
+                            <nanosec>0</nanosec>
+                        </min_heartbeat_response_delay>
+                        <max_heartbeat_response_delay>
+                            <sec>0</sec>
+                            <nanosec>0</nanosec>
+                        </max_heartbeat_response_delay>
+                        <heartbeat_suppression_duration>
+                            <sec>0</sec>
+                            <nanosec>0</nanosec>
+                        </heartbeat_suppression_duration>
+                    </rtps_reliable_reader>
+                </protocol>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                    <!--acknowledgment_kind>DDS_APPLICATION_AUTO_ACKNOWLEDGMENT_MODE</acknowledgment_kind-->
+                    <acknowledgment_kind>DDS_APPLICATION_EXPLICIT_ACKNOWLEDGMENT_MODE</acknowledgment_kind>
+                </reliability>
+    
+                <history>
+                    <kind>KEEP_ALL_HISTORY_QOS</kind>
+                </history>
+			
+            </datareader_qos>
+
+            <participant_qos>
+                <!--
+                The participant name, if it is set, will be displayed in the
+                RTI Analyzer tool, making it easier for you to tell one
+                application from another when you're debugging.
+                -->
+                <participant_name>
+                    <name>RDMA Participant</name>
+                </participant_name>
+                <transport_builtin>
+                  <mask>UDPv4</mask>
+                </transport_builtin>
+                <discovery_config>
+                  <initial_participant_announcements>10000</initial_participant_announcements>
+                  <min_initial_participant_announcement_period>
+                    <sec>0</sec>
+                    <nanosec>100000000</nanosec>
+                  </min_initial_participant_announcement_period>
+                </discovery_config>
+              <property>    
+                <value>
+                  <element>
+                    <name>dds.transport.UDPv4.builtin.parent.allow_interfaces_list</name>
+                    <!--value>192.168.1.*</value-->
+                    <value>10.45.1.*</value>
+                  </element>             
+                </value>
+              </property>
+
+            </participant_qos>
+        </qos_profile>
+        <!--qos_profile name="rdma_sync_writer_qos" base_name="rdma_library::rdma_profile"/>
+        <qos_profile name="rdma_sync_reader_qos" base_name="rdma_library::rdma_profile"/-->
+    </qos_library>
+  
+  <domain_library name="rdma_domain_library" >
+    <domain name="rdma_control_domain" domain_id="65">
+      <register_type name="RDMA_Control" 
+                     kind="userGenerated" />
+      <topic name="RDMASyncTopic"
+             register_type_ref="RDMA_Control">
+      </topic>
+    </domain>
+  </domain_library>
+  
+  <participant_library name="rdma_participant_library">
+    <domain_participant name="sender_participant"
+                        domain_ref="rdma_domain_library::rdma_control_domain">
+      <participant_qos name="rdma_control_participant_qos"
+                       base_name="rdma_library::rdma_profile"/>
+
+      <publisher name="rdma_publisher">
+        <data_writer name="rdma_sync_writer"
+                     topic_ref="RDMASyncTopic">
+          <datawriter_qos name="rdma_sync_writer_qos"
+                          base_name="rdma_library::rdma_profile"/>
+        </data_writer>
+      </publisher>
+    </domain_participant>
+    
+    <domain_participant name="receiver_participant"
+                        domain_ref="rdma_domain_library::rdma_control_domain">
+      <subscriber name="rdma_subscriber">
+        <data_reader name="rdma_sync_reader"
+                     topic_ref="RDMASyncTopic">
+          <datareader_qos name="rdma_sync_reader_qos"
+                          base_name="rdma_library::rdma_profile"/>
+        </data_reader>
+      </subscriber>
+    </domain_participant>
+  </participant_library>
+  
+</dds>
